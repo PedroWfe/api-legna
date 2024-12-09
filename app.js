@@ -14,7 +14,8 @@ app.use(express.json())
 const User       = require('./models/User')
 const Supplier   = require('./models/Supplier')
 const Product    = require('./models/Product')
-
+const Entry      = require('./models/Entry')
+''
 // --- Open Route - Public Route --- //
 
 app.get('/', (req, res) => {
@@ -322,6 +323,93 @@ app.delete("/product/:id", checkToken, async (req, res) =>{
         res.status(500).json({msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!"})
     }
 })
+
+// -- Entry -- //
+
+app.get("/entry", checkToken, async (req, res) =>{
+    
+    // Check if entry exists
+    const entry = await Entry.find()
+    if(entry.length == 0){
+        return res.status(404).json({msg:"Entrada não encontrada!"})
+    }
+    res.status(200).json({entry})
+
+})
+
+app.get("/entry/:id", checkToken, async (req, res) =>{
+    const id = req.params.id
+    // Check if entry exists
+    const entry = await Entry.findById(id)
+    if(!entry){
+        return res.status(404).json({msg:"Entrada não encontrado!"})
+    }
+    res.status(200).json({entry})
+})
+
+app.post("/entry/create", checkToken, async (req, res) => {
+    const {supplierId, buy, author} = req.body
+    const currentDate = new Date()
+    const entryObject = []
+
+    // Check if supplier exists
+    const supplierExists = await Supplier.findById(supplierId)
+    if(!supplierExists){
+        return res.status(404).json({msg:"Fornecedor não encontrado!"})
+    }
+    // Check if user exists
+    const userExists = await User.findOne({name:author})
+    if(!userExists){
+        return res.status(404).json({msg:"Usuario não encontrado!"})
+    }
+
+    buy.forEach(function(buy){
+        entryObject.push(
+            {
+             date: currentDate,
+             supplierId, 
+             productName: buy.productName, 
+             productAmount: buy.productAmount, 
+             productValue: buy.productValue, 
+             author
+            }
+        )
+    })
+    try{
+        await Entry.insertMany(entryObject)
+        entryObject.forEach(async function(object){
+            const product = await Product.findOne({name:object.productName})
+            await Product.updateMany({name:object.productName}, {amount: (product.amount + Number(object.productAmount))})
+        })
+        res.status(201).json({msg: "Entrada registrada com sucesso!"})
+    } catch(error) {
+        console.log(error)
+        res.status(500).json({msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!"})
+    }
+})
+
+// Fazer rota PUT
+
+app.delete("/entry/:id", checkToken, async (req, res) =>{
+    const id = req.params.id
+    const entry = await Entry.findById(id)
+    
+    // Check supplier exists
+    if(!entry){
+        return res.status(404).json({msg:"Entrada não encontrada!"})
+    }
+
+    try{
+        await Entry.findByIdAndDelete(id)
+        res.status(201).json({msg: "Entrada deletada com sucesso!"})
+    } catch(error) {
+        console.log(error)
+        res.status(500).json({msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!"})
+    }
+})
+
+
+
 
 // Function - Check Token
 
