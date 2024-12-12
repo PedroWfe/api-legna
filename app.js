@@ -15,7 +15,7 @@ const User       = require('./models/User')
 const Supplier   = require('./models/Supplier')
 const Product    = require('./models/Product')
 const Entry      = require('./models/Entry')
-''
+
 // --- Open Route - Public Route --- //
 
 app.get('/', (req, res) => {
@@ -408,6 +408,16 @@ app.delete("/entry/:id", checkToken, async (req, res) =>{
     }
 })
 
+// -- Missing Product -- //
+
+app.get("/missing", checkToken, async (req, res) =>{
+    const missingProduct = await Product.find({amount: 0})
+    console.log(missingProduct)
+    if(missingProduct.length == 0){
+        return res.status(404).json({msg:"Não foi encontrado produtos em falta!"})
+    }
+    res.status(200).json({missingProduct})
+})
 
 
 
