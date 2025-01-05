@@ -1,11 +1,10 @@
-// Teste Commit
 require("dotenv").config();
 
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-
+const { ObjectId } = require("mongodb");
 const app = express();
 
 // Config JSON response
@@ -17,6 +16,14 @@ const Supplier = require("./models/Supplier");
 const Product = require("./models/Product");
 const Entry = require("./models/Entry");
 
+// Schemas
+const registerUserSchema = require("./schemas/registerUserSchema");
+const loginSchema = require("./schemas/loginSchema");
+const supplierSchema = require("./schemas/supplierSchema");
+const userSchema = require("./schemas/userSchema");
+const productSchema = require("./schemas/productSchema");
+const entrySchema = require("./schemas/entrySchema");
+
 // --- Open Route - Public Route --- //
 
 app.get("/", (req, res) => {
@@ -25,25 +32,19 @@ app.get("/", (req, res) => {
 
 // Register User
 app.post("/auth/register", async (req, res) => {
-  const { name, email, password, confirmpassword } = req.body;
+  const { name, username, password } = req.body;
 
   // Validations
-  if (!name) {
-    return res.status(422).json({ msg: "O nome é obrigatório!" });
-  }
-  if (!email) {
-    return res.status(422).json({ msg: "O email é obrigatório!" });
-  }
-  if (!password) {
-    return res.status(422).json({ msg: "A senha é obrigatória!" });
-  }
-  if (password !== confirmpassword) {
-    return res.status(422).json({ msg: "As senhas não conferem!" });
-  }
+  const result = registerUserSchema.safeParse(req.body);
+  if (!result.success)
+    return res.status(422).json({ msg: result.error?.errors[0].message });
+
   // Check if user exists
-  const userExists = await User.findOne({ email: email });
+  const userExists = await User.findOne({ username: username });
   if (userExists) {
-    return res.status(422).json({ msg: "O email utilizado já está em uso" });
+    return res
+      .status(422)
+      .json({ msg: "O username utilizado já está em uso!" });
   }
 
   // Create password
@@ -53,7 +54,7 @@ app.post("/auth/register", async (req, res) => {
   // Create user
   const user = new User({
     name,
-    email,
+    username,
     password: passwordHash,
   });
 
@@ -62,29 +63,26 @@ app.post("/auth/register", async (req, res) => {
     res.status(201).json({ msg: "Usuário criado com sucesso!" });
   } catch (error) {
     console.log(error);
-    res
-      .status(500)
-      .json({
-        msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-      });
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
   }
 });
 
 // Login User
 app.post("/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email) {
-    return res.status(422).json({ msg: "O email é obrigatório!" });
-  }
-  if (!password) {
-    return res.status(422).json({ msg: "A senha é obrigatória!" });
-  }
+  const { username, password } = req.body;
+
+  // Validations
+  const result = loginSchema.safeParse(req.body);
+  if (!result.success)
+    return res.status(422).json({ msg: result.error?.errors[0].message });
 
   // Check if user exists
-  const user = await User.findOne({ email: email });
+  const user = await User.findOne({ username: username });
 
   if (!user) {
-    return res.status(404).json({ msg: "Usuario não encontrado" });
+    return res.status(404).json({ msg: "Usuario não encontrado!" });
   }
 
   // Check if password match
@@ -102,11 +100,12 @@ app.post("/auth/login", async (req, res) => {
       },
       secret
     );
+
     res.status(200).json({ msg: "Autenticação realizada com sucesso!", token });
   } catch {
     console.log(error);
     res.status(500).json({
-      msg: "Aconteceu um erro no sesrvidor, tente novamente mais tarde!",
+      msg: "Aconteceu um erro no servidor, tente novamente mais tarde!",
     });
   }
 });
@@ -117,6 +116,11 @@ app.post("/auth/login", async (req, res) => {
 
 app.get("/user/:id", checkToken, async (req, res) => {
   const id = req.params.id;
+
+  // Check id params
+  const result = userSchema.safeParse({ id: id });
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
 
   // Check if user exists
   const user = await User.findById(id, "-password");
@@ -131,7 +135,7 @@ app.get("/user/:id", checkToken, async (req, res) => {
 app.get("/supplier", checkToken, async (req, res) => {
   // Check if supplier exists
   const supplier = await Supplier.find();
-  if (supplier.length == 0) {
+  if (supplier.length === 0) {
     return res.status(404).json({ msg: "Fornecedor não encontrado!" });
   }
   res.status(200).json({ supplier });
@@ -139,22 +143,33 @@ app.get("/supplier", checkToken, async (req, res) => {
 
 app.get("/supplier/:id", checkToken, async (req, res) => {
   const id = req.params.id;
+
+  // Check id params
+  const result = supplierSchema.safeParse({ id: id });
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
+
   // Check if supplier exists
   const supplier = await Supplier.findById(id);
   if (!supplier) {
     return res.status(404).json({ msg: "Fornecedor não encontrado!" });
   }
+
   res.status(200).json({ supplier });
 });
 
 app.post("/supplier/create", checkToken, async (req, res) => {
   const { name } = req.body;
+
   // Validations
-  if (!name) {
-    return res.status(422).json({ msg: "O nome do fornecedor é obrigatório!" });
-  }
+  const result = supplierSchema.safeParse({ name: name });
+  if (!result.success)
+    return res.status(422).json({ msg: result.error?.errors[0].message });
+
   // Check if supplier exists
-  const supplierExists = await Supplier.findOne({ name: name });
+  const supplierExists = await Supplier.findOne({
+    name: { $regex: `^${name}$`, $options: "i" },
+  });
   if (supplierExists) {
     return res.status(422).json({ msg: "Este fornecedor já existe!" });
   }
@@ -169,30 +184,27 @@ app.post("/supplier/create", checkToken, async (req, res) => {
     res.status(201).json({ msg: "Fornecedor criado com sucesso!" });
   } catch (error) {
     console.log(error);
-    res
-      .status(500)
-      .json({
-        msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-      });
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
   }
 });
 
 app.put("/supplier/:id", checkToken, async (req, res) => {
   const id = req.params.id;
   const { name } = req.body;
-  const supplier = await Supplier.findById(id);
+
+  // Check id params
+  const result = supplierSchema.safeParse({ id: id, name: name });
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
 
   // Check supplier exists
+  const supplier = await Supplier.findById(id);
   if (!supplier) {
     return res.status(404).json({ msg: "Fornecedor não encontrado!" });
   }
 
-  // Check if name exists
-  if (!name) {
-    return res
-      .status(400)
-      .json({ msg: "Nenhum campo para atualizar foi fornecido!" });
-  }
   // Check if the name is already in use
   const nameExists = await Supplier.findOne({ name: name });
   if (nameExists) {
@@ -203,19 +215,22 @@ app.put("/supplier/:id", checkToken, async (req, res) => {
     res.status(201).json({ msg: "Fornecedor alterado com sucesso!" });
   } catch (error) {
     console.log(error);
-    res
-      .status(500)
-      .json({
-        msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-      });
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
   }
 });
 
 app.delete("/supplier/:id", checkToken, async (req, res) => {
   const id = req.params.id;
-  const supplier = await Supplier.findById(id);
+
+  // Check id params
+  const result = supplierSchema.safeParse({ id: id });
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
 
   // Check supplier exists
+  const supplier = await Supplier.findById(id);
   if (!supplier) {
     return res.status(404).json({ msg: "Fornecedor não encontrado!" });
   }
@@ -225,11 +240,9 @@ app.delete("/supplier/:id", checkToken, async (req, res) => {
     res.status(201).json({ msg: "Fornecedor deletado com sucesso!" });
   } catch (error) {
     console.log(error);
-    res
-      .status(500)
-      .json({
-        msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-      });
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
   }
 });
 
@@ -238,7 +251,7 @@ app.delete("/supplier/:id", checkToken, async (req, res) => {
 app.get("/product", checkToken, async (req, res) => {
   // Check if product exists
   const product = await Product.find();
-  if (product.length == 0) {
+  if (product.length === 0) {
     return res.status(404).json({ msg: "Produto não encontrado!" });
   }
   res.status(200).json({ product });
@@ -246,6 +259,12 @@ app.get("/product", checkToken, async (req, res) => {
 
 app.get("/product/:id", checkToken, async (req, res) => {
   const id = req.params.id;
+
+  // Check id params
+  const result = productSchema.safeParse({ id: id });
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
+
   // Check if product exists
   const product = await Product.findById(id);
   if (!product) {
@@ -255,18 +274,18 @@ app.get("/product/:id", checkToken, async (req, res) => {
 });
 
 app.post("/product/create", checkToken, async (req, res) => {
-  const { name, amount } = req.body;
+  const { name } = req.body;
+
   // Validations
-  if (!name) {
-    return res.status(422).json({ msg: "O nome do produto é obrigatório!" });
-  }
-  if (!amount) {
-    return res
-      .status(422)
-      .json({ msg: "A quantidade do produto é obrigatória!" });
-  }
-  // Check if product exists
-  const productExists = await Product.findOne({ name: name });
+  const result = productSchema.safeParse(req.body);
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
+
+  // Check if product exists | Com a alteração, a comparação é feita com todas as letras minusculas, tanto o resultado que vem do banco quanto o que fornecemos na api
+  const productExists = await Product.findOne({
+    name: { $regex: `^${name}$`, $options: "i" },
+  });
+
   if (productExists) {
     return res.status(422).json({ msg: "Este produto já existe!" });
   }
@@ -274,7 +293,7 @@ app.post("/product/create", checkToken, async (req, res) => {
   // Create product
   const product = new Product({
     name,
-    amount,
+    quantity: 0,
   });
 
   try {
@@ -282,53 +301,56 @@ app.post("/product/create", checkToken, async (req, res) => {
     res.status(201).json({ msg: "Produto criado com sucesso!" });
   } catch (error) {
     console.log(error);
-    res
-      .status(500)
-      .json({
-        msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-      });
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
   }
 });
 
 app.put("/product/:id", checkToken, async (req, res) => {
   const id = req.params.id;
-  const { name, amount } = req.body;
-  const product = await Product.findById(id);
+  const { name } = req.body;
+
+  // Validations
+  const result = productSchema.safeParse({
+    id: id,
+    name: name,
+  });
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
 
   // Check product exists
+  const product = await Product.findById(id);
   if (!product) {
     return res.status(404).json({ msg: "Produto não encontrado!" });
   }
 
-  // Check if name exists
-  if (!name && !amount) {
-    return res
-      .status(400)
-      .json({ msg: "Nenhum campo para atualizar foi fornecido!" });
-  }
   // Check if the name is already in use
   const nameExists = await Product.findOne({ name: name });
   if (nameExists) {
     return res.status(422).json({ msg: "Este nome já está em uso!" });
   }
   try {
-    await Product.findByIdAndUpdate(id, { name, amount });
+    await Product.findByIdAndUpdate(id, { name });
     res.status(201).json({ msg: "Produto alterado com sucesso!" });
   } catch (error) {
     console.log(error);
-    res
-      .status(500)
-      .json({
-        msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-      });
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
   }
 });
 
 app.delete("/product/:id", checkToken, async (req, res) => {
   const id = req.params.id;
-  const product = await Product.findById(id);
+
+  // Validations
+  const result = productSchema.safeParse({ id: id });
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
 
   // Check supplier exists
+  const product = await Product.findById(id);
   if (!product) {
     return res.status(404).json({ msg: "Produto não encontrado!" });
   }
@@ -338,11 +360,9 @@ app.delete("/product/:id", checkToken, async (req, res) => {
     res.status(201).json({ msg: "Produto deletado com sucesso!" });
   } catch (error) {
     console.log(error);
-    res
-      .status(500)
-      .json({
-        msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-      });
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
   }
 });
 
@@ -351,7 +371,8 @@ app.delete("/product/:id", checkToken, async (req, res) => {
 app.get("/entry", checkToken, async (req, res) => {
   // Check if entry exists
   const entry = await Entry.find();
-  if (entry.length == 0) {
+
+  if (entry.length === 0) {
     return res.status(404).json({ msg: "Entrada não encontrada!" });
   }
   res.status(200).json({ entry });
@@ -359,11 +380,13 @@ app.get("/entry", checkToken, async (req, res) => {
 
 app.get("/entry/:id", checkToken, async (req, res) => {
   const id = req.params.id;
+
   // Check if entry exists
   const entry = await Entry.findById(id);
   if (!entry) {
     return res.status(404).json({ msg: "Entrada não encontrado!" });
   }
+
   res.status(200).json({ entry });
 });
 
@@ -372,13 +395,19 @@ app.post("/entry/create", checkToken, async (req, res) => {
   const currentDate = new Date();
   const entryObject = [];
 
+  // Validations
+  const result = entrySchema.safeParse(req.body);
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
+
   // Check if supplier exists
   const supplierExists = await Supplier.findById(supplierId);
   if (!supplierExists) {
     return res.status(404).json({ msg: "Fornecedor não encontrado!" });
   }
+
   // Check if user exists
-  const userExists = await User.findOne({ name: author });
+  const userExists = await User.findOne({ _id: new ObjectId(author) });
   if (!userExists) {
     return res.status(404).json({ msg: "Usuario não encontrado!" });
   }
@@ -387,29 +416,44 @@ app.post("/entry/create", checkToken, async (req, res) => {
     entryObject.push({
       date: currentDate,
       supplierId,
-      productName: buy.productName,
-      productAmount: buy.productAmount,
-      productValue: buy.productValue,
+      materialName: buy.materialName,
+      quantity: buy.quantity,
+      totalValue: buy.totalValue,
       author,
     });
   });
+
   try {
-    await Entry.insertMany(entryObject);
-    entryObject.forEach(async function (object) {
-      const product = await Product.findOne({ name: object.productName });
+    // Tive que trocar o "foreach" por "for of" porque o "foreach" não aceita return.
+    // Esse "for of" checará se todos os materiais da compra existem no banco.
+    for (const object of entryObject) {
+      const product = await Product.findOne({ name: object.materialName });
+
+      if (!product) {
+        return res.status(404).json({
+          msg: "Alguns produtos não estão cadastrados. A compra não foi realizada!",
+        });
+      }
+    }
+
+    // Esse "for of" acrescentará a quantidade comprada em cada material.
+    for (const object of entryObject) {
+      const product = await Product.findOne({ name: object.materialName });
       await Product.updateMany(
-        { name: object.productName },
-        { amount: product.amount + Number(object.productAmount) }
+        { name: object.materialName },
+        { quantity: product.quantity + Number(object.quantity) }
       );
-    });
+    }
+
+    // Insere o array de compras no banco
+    await Entry.insertMany(entryObject);
+
     res.status(201).json({ msg: "Entrada registrada com sucesso!" });
   } catch (error) {
     console.log(error);
-    res
-      .status(500)
-      .json({
-        msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-      });
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
   }
 });
 
@@ -417,9 +461,14 @@ app.post("/entry/create", checkToken, async (req, res) => {
 
 app.delete("/entry/:id", checkToken, async (req, res) => {
   const id = req.params.id;
-  const entry = await Entry.findById(id);
+
+  // Validations
+  const result = entrySchema.safeParse({ id: id });
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
 
   // Check supplier exists
+  const entry = await Entry.findById(id);
   if (!entry) {
     return res.status(404).json({ msg: "Entrada não encontrada!" });
   }
@@ -429,20 +478,18 @@ app.delete("/entry/:id", checkToken, async (req, res) => {
     res.status(201).json({ msg: "Entrada deletada com sucesso!" });
   } catch (error) {
     console.log(error);
-    res
-      .status(500)
-      .json({
-        msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-      });
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
   }
 });
 
 // -- Missing Product -- //
 
 app.get("/missing", checkToken, async (req, res) => {
-  const missingProduct = await Product.find({ amount: 0 });
-  console.log(missingProduct);
-  if (missingProduct.length == 0) {
+  const missingProduct = await Product.find({ quantity: 0 });
+
+  if (missingProduct.length === 0) {
     return res
       .status(404)
       .json({ msg: "Não foi encontrado produtos em falta!" });
@@ -475,10 +522,31 @@ const dbPassword = process.env.DB_PASS;
 
 mongoose
   .connect(
-    `mongodb+srv://${dbUser}:${dbPassword}@cluster0.btgpk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`
+    `mongodb+srv://${dbUser}:${dbPassword}@cluster0.e8yw0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`
   )
   .then(() => {
     app.listen(3000);
     console.log("Conectou ao banco!");
   })
   .catch((err) => console.log(err));
+
+// Sua URL Pedro
+// @cluster0.btgpk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+
+/* Alterações */
+
+/**
+ * Todas as rotas estão com validação nos campos.
+ *
+ * Todas as rotas que passam o ID passaram a ter uma checagem se o formato desse ID é válido.
+ *
+ * O model User passou a ter o campo username ao invés de email.
+ *
+ * O model Product passou a ter o campo quantity ao invés de amount.
+ *
+ * Agora, ao criar o produto não é passado a quantidade do produto. (Quando eles forem incluir o estoque atual, nós avisamos para incluir como uma compra e com valor 0)
+ *
+ * Agora, ao atualizar o produto não é passado a quantidade.
+ *
+ * Finalizei a entrada de produtos POST.
+ */

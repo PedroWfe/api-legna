@@ -1,8 +1,8 @@
-const mongoose = require('mongoose')
+const mongoose = require("mongoose");
 
-const Product = mongoose.model('Product', {
-    name: String,
-    amount: Number
-})
+const Product = mongoose.model("Product", {
+  name: String,
+  quantity: Number,
+});
 
-module.exports = Product
+module.exports = Product;
