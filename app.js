@@ -15,6 +15,7 @@ const User = require("./models/User");
 const Supplier = require("./models/Supplier");
 const Product = require("./models/Product");
 const Entry = require("./models/Entry");
+const Exit = require("./models/Exit");
 
 // Schemas
 const registerUserSchema = require("./schemas/registerUserSchema");
@@ -23,6 +24,7 @@ const supplierSchema = require("./schemas/supplierSchema");
 const userSchema = require("./schemas/userSchema");
 const productSchema = require("./schemas/productSchema");
 const entrySchema = require("./schemas/entrySchema");
+const exitSchema = require("./schemas/exitSchema");
 
 // --- Open Route - Public Route --- //
 
@@ -101,7 +103,7 @@ app.post("/auth/login", async (req, res) => {
       secret
     );
 
-    res.status(200).json({ msg: "Autenticação realizada com sucesso!", token });
+    res.status(200).json({ msg: "Autenticação realizada com sucesso!", token, id:user._id });
   } catch {
     console.log(error);
     res.status(500).json({
@@ -355,6 +357,11 @@ app.delete("/product/:id", checkToken, async (req, res) => {
     return res.status(404).json({ msg: "Produto não encontrado!" });
   }
 
+  // Check if product is over
+  if (product.quantity !== 0){
+    return res.status(404).json({ msg: "O produto não está zerado!" });
+  }
+
   try {
     await Product.findByIdAndDelete(id);
     res.status(201).json({ msg: "Produto deletado com sucesso!" });
@@ -483,6 +490,63 @@ app.delete("/entry/:id", checkToken, async (req, res) => {
     });
   }
 });
+
+// -- Exit -- //
+
+app.post("/exit/create", checkToken, async (req, res) => {
+    const { materialName, quantity, author } = req.body;
+    const currentDate = new Date();
+
+    // Validations
+    const result = exitSchema.safeParse(req.body);
+    if(!result.success)
+        return res.status(400).json({ msg: result.error?.errors[0].message });
+
+    // Check if materialName exists
+    const materialNameExists = await Product.findOne({
+        name: { $regex: `^${materialName}$`, $options: "i" },
+    })
+    if (!materialNameExists){
+        return res.status(422).json({ msg: "Material não existe!" });
+    }
+    if (materialNameExists.quantity < quantity){
+        return res.status(422).json({ msg: "A quantidade que está sendo retirada é maior que o total" });
+    }
+
+    // Create Exit
+    const exit = new Exit({
+        date: currentDate,
+        materialName,
+        quantity,
+        author
+    })
+
+    try{
+        await Product.updateOne(
+            { name: materialName },
+            { quantity: materialNameExists.quantity - Number(quantity) }
+        );
+        await exit.save();
+        res.status(201).json({ msg: "Saída registrada com sucesso!" });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({
+          msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+        });
+    }
+
+});
+
+app.get("/exit", checkToken, async (req, res) => {
+      // Check if entry exists
+  const exit = await Exit.find();
+
+  if (exit.length === 0) {
+    return res.status(404).json({ msg: "Entrada não encontrada!" });
+  }
+  res.status(200).json({ exit });
+});
+
 
 // -- Missing Product -- //
 
