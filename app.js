@@ -103,7 +103,13 @@ app.post("/auth/login", async (req, res) => {
       secret
     );
 
-    res.status(200).json({ msg: "Autenticação realizada com sucesso!", token, id:user._id });
+    res
+      .status(200)
+      .json({
+        msg: "Autenticação realizada com sucesso!",
+        token,
+        id: user._id,
+      });
   } catch {
     console.log(error);
     res.status(500).json({
@@ -129,7 +135,7 @@ app.get("/user/:id", checkToken, async (req, res) => {
   if (!user) {
     return res.status(404).json({ msg: "Usuario não encontrado!" });
   }
-  res.status(200).json({ user });
+  res.status(200).json(user);
 });
 
 // -- Supplier -- //
@@ -358,7 +364,7 @@ app.delete("/product/:id", checkToken, async (req, res) => {
   }
 
   // Check if product is over
-  if (product.quantity !== 0){
+  if (product.quantity !== 0) {
     return res.status(404).json({ msg: "O produto não está zerado!" });
   }
 
@@ -494,51 +500,54 @@ app.delete("/entry/:id", checkToken, async (req, res) => {
 // -- Exit -- //
 
 app.post("/exit/create", checkToken, async (req, res) => {
-    const { materialName, quantity, author } = req.body;
-    const currentDate = new Date();
+  const { materialName, quantity, author } = req.body;
+  const currentDate = new Date();
 
-    // Validations
-    const result = exitSchema.safeParse(req.body);
-    if(!result.success)
-        return res.status(400).json({ msg: result.error?.errors[0].message });
+  // Validations
+  const result = exitSchema.safeParse(req.body);
+  if (!result.success)
+    return res.status(400).json({ msg: result.error?.errors[0].message });
 
-    // Check if materialName exists
-    const materialNameExists = await Product.findOne({
-        name: { $regex: `^${materialName}$`, $options: "i" },
-    })
-    if (!materialNameExists){
-        return res.status(422).json({ msg: "Material não existe!" });
-    }
-    if (materialNameExists.quantity < quantity){
-        return res.status(422).json({ msg: "A quantidade que está sendo retirada é maior que o total" });
-    }
+  // Check if materialName exists
+  const materialNameExists = await Product.findOne({
+    name: { $regex: `^${materialName}$`, $options: "i" },
+  });
+  if (!materialNameExists) {
+    return res.status(422).json({ msg: "Material não existe!" });
+  }
+  if (materialNameExists.quantity < quantity) {
+    return res
+      .status(422)
+      .json({
+        msg: "A quantidade que está sendo retirada é maior que o total",
+      });
+  }
 
-    // Create Exit
-    const exit = new Exit({
-        date: currentDate,
-        materialName,
-        quantity,
-        author
-    })
+  // Create Exit
+  const exit = new Exit({
+    date: currentDate,
+    materialName,
+    quantity,
+    author,
+  });
 
-    try{
-        await Product.updateOne(
-            { name: materialName },
-            { quantity: materialNameExists.quantity - Number(quantity) }
-        );
-        await exit.save();
-        res.status(201).json({ msg: "Saída registrada com sucesso!" });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({
-          msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
-        });
-    }
-
+  try {
+    await Product.updateOne(
+      { name: materialName },
+      { quantity: materialNameExists.quantity - Number(quantity) }
+    );
+    await exit.save();
+    res.status(201).json({ msg: "Saída registrada com sucesso!" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
+  }
 });
 
 app.get("/exit", checkToken, async (req, res) => {
-      // Check if entry exists
+  // Check if entry exists
   const exit = await Exit.find();
 
   if (exit.length === 0) {
@@ -546,7 +555,6 @@ app.get("/exit", checkToken, async (req, res) => {
   }
   res.status(200).json({ exit });
 });
-
 
 // -- Missing Product -- //
 
