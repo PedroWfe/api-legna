@@ -563,6 +563,36 @@ app.get("/missing", checkToken, async (req, res) => {
   res.status(200).json(missingProduct);
 });
 
+// -- Top 5 - Greater Output -- //
+
+app.get("/topfive", checkToken, async (req, res) => {
+  try {
+    const results = await Exit.aggregate([
+      {
+        $group: {
+          _id: "$materialName", 
+          totalOut: {$sum: "$quantity"},
+        },
+      },
+      { $sort: {totalOut: -1} },
+      { $limit: 5 },
+    ]);
+    const data = results.map((exit) => ({
+      name: exit._id,
+      out: exit.totalOut,
+    }));
+
+    res.json(data);
+  
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      msg: "Erro ao tentar se conectar com o servidor, tente novamente mais tarde!",
+    });
+  }
+
+});
+
 // Function - Check Token
 
 function checkToken(req, res, next) {
