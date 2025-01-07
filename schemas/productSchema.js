@@ -16,7 +16,7 @@ const productSchema = z.object({
         return true;
       },
       {
-        message: "Formato inválido!",
+        message: "Id do produto está com um formato inválido!",
       }
     )
     .optional(),

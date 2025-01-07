@@ -84,14 +84,14 @@ app.post("/auth/login", async (req, res) => {
   const user = await User.findOne({ username: username });
 
   if (!user) {
-    return res.status(404).json({ msg: "Usuario não encontrado!" });
+    return res.status(404).json({ msg: "Usuário ou senha estão incorretos!" });
   }
 
   // Check if password match
   const checkPassword = await bcrypt.compare(password, user.password);
 
   if (!checkPassword) {
-    return res.status(422).json({ msg: "Senha inválida!" });
+    return res.status(422).json({ msg: "Usuário ou senha estão incorretos!" });
   }
 
   try {
@@ -103,13 +103,11 @@ app.post("/auth/login", async (req, res) => {
       secret
     );
 
-    res
-      .status(200)
-      .json({
-        msg: "Autenticação realizada com sucesso!",
-        token,
-        id: user._id,
-      });
+    res.status(200).json({
+      msg: "Autenticação realizada com sucesso!",
+      token,
+      id: user._id,
+    });
   } catch {
     console.log(error);
     res.status(500).json({
@@ -144,9 +142,9 @@ app.get("/supplier", checkToken, async (req, res) => {
   // Check if supplier exists
   const supplier = await Supplier.find();
   if (supplier.length === 0) {
-    return res.status(404).json({ msg: "Fornecedor não encontrado!" });
+    return res.status(200).json([]);
   }
-  res.status(200).json({ supplier });
+  res.status(200).json(supplier);
 });
 
 app.get("/supplier/:id", checkToken, async (req, res) => {
@@ -260,9 +258,9 @@ app.get("/product", checkToken, async (req, res) => {
   // Check if product exists
   const product = await Product.find();
   if (product.length === 0) {
-    return res.status(404).json({ msg: "Produto não encontrado!" });
+    return res.status(200).json([]);
   }
-  res.status(200).json({ product });
+  res.status(200).json(product);
 });
 
 app.get("/product/:id", checkToken, async (req, res) => {
@@ -278,7 +276,7 @@ app.get("/product/:id", checkToken, async (req, res) => {
   if (!product) {
     return res.status(404).json({ msg: "Produto não encontrado!" });
   }
-  res.status(200).json({ product });
+  res.status(200).json(product);
 });
 
 app.post("/product/create", checkToken, async (req, res) => {
@@ -516,11 +514,9 @@ app.post("/exit/create", checkToken, async (req, res) => {
     return res.status(422).json({ msg: "Material não existe!" });
   }
   if (materialNameExists.quantity < quantity) {
-    return res
-      .status(422)
-      .json({
-        msg: "A quantidade que está sendo retirada é maior que o total",
-      });
+    return res.status(422).json({
+      msg: "A quantidade que está sendo retirada é maior que o total!",
+    });
   }
 
   // Create Exit
@@ -562,11 +558,9 @@ app.get("/missing", checkToken, async (req, res) => {
   const missingProduct = await Product.find({ quantity: 0 });
 
   if (missingProduct.length === 0) {
-    return res
-      .status(404)
-      .json({ msg: "Não foi encontrado produtos em falta!" });
+    return res.status(200).json([]);
   }
-  res.status(200).json({ missingProduct });
+  res.status(200).json(missingProduct);
 });
 
 // Function - Check Token

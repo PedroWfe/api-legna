@@ -14,7 +14,7 @@ const userSchema = z.object({
       return true;
     },
     {
-      message: "Formato inválido!",
+      message: "Id do usuário está com um formato inválido!",
     }
   ),
 });
